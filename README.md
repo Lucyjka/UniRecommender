@@ -1,5 +1,6 @@
 # UniRecommender
 Aplikacja oparta na technologiach AI, stworzona z użyciem modelu LMM Google Gemini 
+Pobiera dane z krajowego rejestru Uczelni Wyższych w Polsce
 
 # Konfiguracja
 1. Wygeneruj klucz API ze strony Google 
