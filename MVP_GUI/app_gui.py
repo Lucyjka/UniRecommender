@@ -1,8 +1,34 @@
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (QWidget, QLabel, QVBoxLayout, QHBoxLayout, QLineEdit,
-                             QPushButton, QComboBox, QTextEdit, QCheckBox, QApplication)
+                             QPushButton, QComboBox, QTextEdit, QCheckBox, QApplication, QProgressBar)
 from application import get_recommendations
+from PyQt6.QtCore import QThread, pyqtSignal
+
+
+# Klasa wątku - obsługuje rekomendacje w tle
+class RecommendationThread(QThread):
+    results_ready = pyqtSignal(list)
+    error_signal = pyqtSignal(str)
+
+    def __init__(self, city, profile, level, institution_kind, interests):
+        super().__init__()
+        self.city = city
+        self.profile = profile
+        self.level = level
+        self.institution_kind = institution_kind
+        self.interests = interests
+
+    def run(self):
+        try:
+            results = get_recommendations(self.city, self.profile, self.level, self.institution_kind, self.interests)
+
+            if isinstance(results, str):
+                results = [results]
+
+            self.results_ready.emit(results)
+        except Exception as e:
+            self.error_signal.emit(str(e))
 
 
 # Okno wyboru studiów
@@ -163,6 +189,25 @@ class StudyChoiceApp(QWidget):
         self.interest_checkboxes.append(checkbox4)
         checkbox_layout.addWidget(checkbox4)
 
+        # Styl dla checkboxów
+        checkbox_style = """
+            QCheckBox::indicator {
+                background-color: #FDFDFB;
+                border: 2px solid #AFC2C9;
+                border-radius: 1px;
+            }
+            QCheckBox::indicator:checked {
+                background-color: #7B9EA8;
+                border: 2px solid #7B9EA8; 
+                border-radius: 1px;
+            }
+        """
+
+        checkbox1.setStyleSheet(checkbox_style)
+        checkbox2.setStyleSheet(checkbox_style)
+        checkbox3.setStyleSheet(checkbox_style)
+        checkbox4.setStyleSheet(checkbox_style)
+
         interest_layout.addLayout(checkbox_layout)
         layout.addLayout(interest_layout)
 
@@ -189,6 +234,17 @@ class StudyChoiceApp(QWidget):
         self.search_button.clicked.connect(self.search)
         layout.addWidget(self.search_button)
 
+        # Pasek ładowania
+        progress_layout = QVBoxLayout()
+        progress_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setMinimum(0)
+        self.progress_bar.setMaximum(0)
+        self.progress_bar.setVisible(False)
+        layout.addWidget(self.progress_bar)
+        layout.addLayout(progress_layout)
+
 
         # Pole do wyświetlania wyników
         self.result_label = QLabel("Wyniki:")
@@ -199,6 +255,29 @@ class StudyChoiceApp(QWidget):
         self.result_text.setFont(QFont('Helvetica', 14))
         self.result_text.setStyleSheet("color: #282432; background-color: #FDFDFB; padding: 16px; border: 1px solid #AFC2C9; border-radius:20px;")
         layout.addWidget(self.result_text)
+
+
+        # Styl pól wejsciowych
+        input_style = """
+            QLineEdit, QComboBox, QTextEdit, QHBoxLayout {
+                background-color: #FDFDFB;  /* Jasne tło dla kontrastu */
+                border: 1px solid #AFC2C9;  /* Delikatna ramka */
+                border-radius: 8px;  /* Zaokrąglone rogi */
+ 
+            }
+            QLineEdit:focus, QComboBox:focus, QTextEdit:focus {
+                border: 2px solid #7B9EA8;  /* Podkreślenie aktywnego pola */
+                background-color: #FFFFFF;
+            }
+        """
+
+        # Zastosowanie stylu do pól wejściowych
+        self.city_input.setStyleSheet(input_style)
+        self.profile_input.setStyleSheet(input_style)
+        self.level_input.setStyleSheet(input_style)
+        self.institution_input.setStyleSheet(input_style)
+        self.interest_input.setStyleSheet(input_style)
+        self.result_text.setStyleSheet(input_style)
 
         self.setLayout(layout)
 
@@ -213,27 +292,56 @@ class StudyChoiceApp(QWidget):
         institution_kind = self.institution_input.currentText()
         interests = self.interest_input.text()
 
-        results = get_recommendations(city, profile, level, institution_kind, interests)
-        
-        # Formatowanie wyników (aby poprawnie były wypisywane)
+        # Czyszczenie poprzednich wyników
+        self.result_text.clear()
+
+        # Pasek ładowania
+        self.progress_bar.setVisible(True)
+        self.progress_bar.setValue(30)
+
+        self.progress_timer = QTimer(self)
+        self.progress_timer.timeout.connect(self.increment_progress)
+        self.progress_timer.start(500)
+
+        self.thread = RecommendationThread(city, profile, level, institution_kind, interests)
+        self.thread.results_ready.connect(self.finish_search)
+        self.thread.error_signal.connect(self.show_error)
+        self.thread.start()
+
+
+
+    def increment_progress(self):
+        if self.progress_bar.value() < 90:
+            self.progress_bar.setValue(self.progress_bar.value() + 5)
+
+    def finish_search(self, results):
+        self.progress_timer.stop()
+        self.progress_bar.setValue(100)
+        self.progress_bar.setVisible(False)
+
+        # Formatowanie wyników
         if all(isinstance(item, str) and len(item) == 1 for item in results):
-            formatted_results = "".join(results)  # Scala pojedyncze litery w tekst
+            formatted_results = "".join(results)
         else:
-            formatted_results = "\n".join(map(str, results))  # Łączy wyniki w pełne zdania, oddzielone nowymi liniami
-        
-        # Wyświetlanie wyników
+            formatted_results = "\n".join(map(str, results))
 
-        # pogrubienie kierunkow i uczelni
-        formatted_results = formatted_results.replace("Kierunek:", "<b><br><br>Kierunek:</b>").replace("Uczelnie:", "<b><br>Uczelnie:</b>")
-        # dodatkowa uwaga
-        formatted_results += "<br><br><i>Proszę pamiętać, że wyniki mogą się różnić w zależności od dostępnych danych.</i>"
-        # nowa linia dla uwagi 
-        formatted_results = formatted_results.replace("Uwaga:", "<br><br><b>UWAGA!</b>")
-        # gdy "Nie znaleziono odpowiednich kierunków.." dodajemy nowa linie
-        formatted_results = formatted_results.replace("Nie znaleziono", "<br><br>Nie znaleziono")
-        # gdy znajduje ** w odpowiedzi (nieudane pogrubienie tekstu w result) to usuwa
-        formatted_results = formatted_results.replace("**", "")
-        formatted_results = formatted_results.replace("*", "")
+            # Wyświetlanie wyników
+            # pogrubienie kierunkow i uczelni
+            formatted_results = formatted_results.replace("Kierunek:", "<b><br><br>Kierunek:</b>").replace("Uczelnie:","<b><br>Uczelnie:</b>")
+            # dodatkowa uwaga
+            formatted_results += "<br><br><i>Proszę pamiętać, że wyniki mogą się różnić w zależności od dostępnych danych.</i>"
+            # nowa linia dla uwagi
+            formatted_results = formatted_results.replace("Uwaga:", "<br><br><b>UWAGA!</b>")
+            # gdy "Nie znaleziono odpowiednich kierunków.." dodajemy nowa linie
+            formatted_results = formatted_results.replace("Nie znaleziono", "<br><br>Nie znaleziono")
+            # gdy znajduje ** w odpowiedzi (nieudane pogrubienie tekstu w result) to usuwa
+            formatted_results = formatted_results.replace("**", "")
+            formatted_results = formatted_results.replace("*", "")
 
+        self.result_text.setHtml(formatted_results)
 
-        self.result_text.setHtml(formatted_results) # setText
+    def show_error(self, error_message):
+        self.progress_timer.stop()
+        self.progress_bar.setValue(100)
+        self.progress_bar.setVisible(False)
+        self.result_text.setHtml(f"<b style='color:red;'>Błąd:</b> {error_message}")
