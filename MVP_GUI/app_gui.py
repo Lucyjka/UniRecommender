@@ -56,9 +56,9 @@ class StudyChoiceApp(QWidget):
         header.setFont(QFont('Helvetica', 18, QFont.Weight.Bold))
         
         # light
-        header.setStyleSheet("color: #F6F2EF; background-color: #282432; padding: 10px; border-radius:20px;") 
+        # header.setStyleSheet("color: #F6F2EF; background-color: #282432; padding: 10px; border-radius:20px;")
         # dark
-        # header.setStyleSheet("color: #282432; background-color: #AFC2C9; padding: 10px; border-radius:20px;") 
+        header.setStyleSheet("color: #282432; background-color: #AFC2C9; padding: 10px; border-radius:20px;")
         
         header.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(header)
@@ -219,8 +219,8 @@ class StudyChoiceApp(QWidget):
         self.search_button.setFont(QFont('Arial', 16, QFont.Weight.Bold))
         self.search_button.setStyleSheet("""
             QPushButton {
-                background-color: #282432;  
-                color: #F6F2EF;
+                background-color: #AFC2C9; 
+                color: #000000; 
                 border: none;
                 padding: 15px 32px;
                 text-align: center;
@@ -228,7 +228,7 @@ class StudyChoiceApp(QWidget):
                 border-radius: 12px;
             }
             QPushButton:hover {
-                background-color: #4c445f;
+                background-color: #87969C;
             }
         """)
         self.search_button.clicked.connect(self.search)
